@@ -114,6 +114,15 @@ def load_file_to_documents(path: str) -> List[Document]:
         if file_extension == '.pdf':
             loader = PyPDFLoader(path)
             documents = loader.load()
+            
+            # Check if PDF contains any text
+            total_text = "".join([doc.page_content.strip() for doc in documents])
+            if not total_text or len(total_text) < 10:
+                # Try OCR as fallback for scanned PDFs
+                return [Document(
+                    page_content=f"This appears to be a scanned PDF (image-based) with no extractable text. Please use OCR tools or re-upload as images for text extraction.",
+                    metadata={"source": file_path.name, "error": True, "error_type": "scanned_pdf"}
+                )]
         
         # Image files with OCR
         elif file_extension in ['.png', '.jpg', '.jpeg', '.tiff', '.bmp', '.gif']:
@@ -360,6 +369,19 @@ def chunk_documents(docs: List[Document]) -> List[Document]:
     Returns:
         List of chunked Document objects
     """
+    # Filter out empty or error documents
+    valid_docs = []
+    for doc in docs:
+        content = doc.page_content.strip()
+        # Skip empty documents or error messages
+        if content and not doc.metadata.get("error", False):
+            # Ensure minimum content length
+            if len(content) >= 10:
+                valid_docs.append(doc)
+    
+    if not valid_docs:
+        raise ValueError("No valid text content found in document. The file may be a scanned PDF (image-based), corrupted, or empty.")
+    
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=CHUNK_SIZE,
         chunk_overlap=CHUNK_OVERLAP,
@@ -367,7 +389,12 @@ def chunk_documents(docs: List[Document]) -> List[Document]:
         separators=["\n\n", "\n", " ", ""]
     )
     
-    chunked_docs = text_splitter.split_documents(docs)
+    chunked_docs = text_splitter.split_documents(valid_docs)
+    
+    # Final check to ensure we have chunks with content
+    if not chunked_docs:
+        raise ValueError("Document chunking produced no valid chunks. The file may contain no extractable text.")
+    
     return chunked_docs
 
 
@@ -382,9 +409,23 @@ def index_document(file_path: str, display_name: str) -> int:
         
     Returns:
         Number of chunks added to the vector store
+        
+    Raises:
+        ValueError: If document is empty or contains no extractable text
+        Exception: For other processing errors
     """
     # Load documents
     docs = load_file_to_documents(file_path)
+    
+    # Check if any documents have errors
+    error_docs = [doc for doc in docs if doc.metadata.get("error", False)]
+    if error_docs:
+        error_msg = error_docs[0].page_content
+        error_type = error_docs[0].metadata.get("error_type", "unknown")
+        if error_type == "scanned_pdf":
+            raise ValueError("Scanned PDF detected. This file contains only images with no extractable text. Please convert to text-based PDF or use OCR.")
+        else:
+            raise ValueError(error_msg)
     
     # Add metadata to each document
     for doc in docs:
@@ -393,8 +434,12 @@ def index_document(file_path: str, display_name: str) -> int:
         if "page" not in doc.metadata and "page_number" in doc.metadata:
             doc.metadata["page"] = doc.metadata["page_number"]
     
-    # Chunk documents
+    # Chunk documents (this will validate content and raise error if empty)
     chunked_docs = chunk_documents(docs)
+    
+    # Final validation before adding to vector store
+    if not chunked_docs:
+        raise ValueError("No valid content to index. The document may be empty or contain only images.")
     
     # Get vector store and add documents
     vector_store = get_vector_store()
