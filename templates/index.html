@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NotesGPT - RAG Study Assistant</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📚 NotesGPT</h1>
+            <p class="subtitle">Your AI-powered study assistant with RAG technology</p>
+        </header>
+
+        <!-- Upload Section -->
+        <section class="card upload-section">
+            <h2>📤 Upload Your Notes</h2>
+            <p class="section-description">Upload PDF or text files to index them into your knowledge base</p>
+            
+            <form id="upload-form">
+                <div class="file-input-wrapper">
+                    <input 
+                        type="file" 
+                        id="files" 
+                        name="files" 
+                        multiple 
+                        accept=".pdf,.txt"
+                        required
+                    >
+                    <label for="files" class="file-label">Choose files...</label>
+                    <span id="file-names" class="file-names">No files selected</span>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">
+                    Upload & Index
+                </button>
+            </form>
+            
+            <div id="upload-status" class="status-message"></div>
+        </section>
+
+        <!-- Chat Section -->
+        <section class="card chat-section">
+            <h2>💬 Ask Questions</h2>
+            <p class="section-description">Ask questions about your uploaded notes</p>
+            
+            <form id="chat-form">
+                <div class="form-group">
+                    <textarea 
+                        id="question" 
+                        name="question" 
+                        rows="4" 
+                        placeholder="What would you like to know about your notes?"
+                        required
+                    ></textarea>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">
+                    Ask NotesGPT
+                </button>
+            </form>
+            
+            <!-- Answer Display -->
+            <div id="answer-container" class="answer-container" style="display: none;">
+                <h3>Answer:</h3>
+                <div id="answer" class="answer-box"></div>
+                
+                <h3>Sources & Citations:</h3>
+                <div id="sources" class="sources-container"></div>
+            </div>
+        </section>
+
+        <footer>
+            <p>Powered by FastAPI, LangChain, ChromaDB & Groq (FREE API) 🚀</p>
+        </footer>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
