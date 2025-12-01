@@ -23,6 +23,18 @@ sentence-transformers==2.7.0
 
 # Document Processing
 pypdf==4.0.1
+python-docx
+python-pptx
+openpyxl
+pandas
+
+# Image Processing & OCR
+Pillow
+pytesseract
+pdf2image
+
+# Markdown support
+markdown
 
 # Environment Variables
 python-dotenv==1.0.1

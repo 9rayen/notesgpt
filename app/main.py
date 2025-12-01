@@ -45,6 +45,7 @@ async def home(request: Request):
 async def upload_notes(files: List[UploadFile] = File(...)):
     """
     Upload and index one or more document files.
+    Supports: PDF, images, Word, Excel, PowerPoint, text, markdown.
     
     Args:
         files: List of files to upload and index
@@ -68,18 +69,49 @@ async def upload_notes(files: List[UploadFile] = File(...)):
             num_chunks = index_document(str(file_path), file.filename)
             uploaded.append({
                 "filename": file.filename,
-                "chunks": num_chunks
+                "chunks": num_chunks,
+                "status": "success"
             })
         except Exception as e:
             uploaded.append({
                 "filename": file.filename,
-                "error": str(e)
+                "error": str(e),
+                "status": "error"
             })
     
     return {
         "status": "ok",
-        "uploaded": uploaded
+        "uploaded": uploaded,
+        "total_files": len(files),
+        "successful": len([u for u in uploaded if u.get("status") == "success"])
     }
+
+
+@app.get("/api/library")
+async def get_library():
+    """
+    Get list of all uploaded documents in the library.
+    
+    Returns:
+        JSON response with list of files and their metadata
+    """
+    from app.rag import get_library_info
+    return get_library_info()
+
+
+@app.delete("/api/library/{filename}")
+async def delete_document(filename: str):
+    """
+    Delete a document from the library and vector store.
+    
+    Args:
+        filename: Name of the file to delete
+        
+    Returns:
+        JSON response with deletion status
+    """
+    from app.rag import delete_document_from_library
+    return delete_document_from_library(filename)
 
 
 @app.post("/api/chat")

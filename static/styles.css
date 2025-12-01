@@ -148,6 +148,29 @@ input[type="file"] {
     transform: translateY(0);
 }
 
+.btn-secondary {
+    background: #6c757d;
+    color: white;
+    font-size: 0.9rem;
+    padding: 0.5rem 1rem;
+    margin-bottom: 1rem;
+}
+
+.btn-secondary:hover {
+    background: #5a6268;
+}
+
+.btn-delete {
+    background: #dc3545;
+    color: white;
+    font-size: 0.85rem;
+    padding: 0.4rem 0.8rem;
+}
+
+.btn-delete:hover {
+    background: #c82333;
+}
+
 /* ==================== Status Messages ==================== */
 .status-message {
     margin-top: 1rem;
@@ -181,6 +204,15 @@ input[type="file"] {
     margin-top: 2rem;
 }
 
+.answer-meta {
+    background: #e7f3ff;
+    padding: 0.75rem;
+    border-radius: 6px;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+    color: #0066cc;
+}
+
 .answer-container h3 {
     color: #333;
     margin-top: 1.5rem;
@@ -212,6 +244,82 @@ input[type="file"] {
 
 .error {
     color: #dc3545;
+}
+
+/* ==================== Library Section ==================== */
+.library-stats {
+    display: flex;
+    gap: 2rem;
+    margin-bottom: 1.5rem;
+}
+
+.stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1rem;
+    background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+    border-radius: 8px;
+    flex: 1;
+}
+
+.stat-value {
+    font-size: 2rem;
+    font-weight: bold;
+    color: #667eea;
+}
+
+.stat-label {
+    font-size: 0.9rem;
+    color: #666;
+    margin-top: 0.25rem;
+}
+
+.library-list {
+    margin-top: 1rem;
+}
+
+.library-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    background: #f8f9fa;
+    border-radius: 8px;
+    margin-bottom: 0.75rem;
+    border-left: 3px solid #667eea;
+}
+
+.doc-info {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex: 1;
+}
+
+.doc-icon {
+    font-size: 1.5rem;
+}
+
+.doc-name {
+    font-weight: 600;
+    color: #333;
+    flex: 1;
+}
+
+.doc-chunks {
+    color: #666;
+    font-size: 0.85rem;
+    padding: 0.25rem 0.75rem;
+    background: white;
+    border-radius: 20px;
+}
+
+.empty-library {
+    text-align: center;
+    color: #999;
+    padding: 2rem;
+    font-style: italic;
 }
 
 /* ==================== Sources/Citations ==================== */

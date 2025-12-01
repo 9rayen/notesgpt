@@ -15,8 +15,8 @@
 
         <!-- Upload Section -->
         <section class="card upload-section">
-            <h2>📤 Upload Your Notes</h2>
-            <p class="section-description">Upload PDF or text files to index them into your knowledge base</p>
+            <h2>📤 Upload Your Documents</h2>
+            <p class="section-description">Upload documents to build your knowledge library (supports PDF, Word, Excel, PowerPoint, images, text, markdown, and more)</p>
             
             <form id="upload-form">
                 <div class="file-input-wrapper">
@@ -25,7 +25,7 @@
                         id="files" 
                         name="files" 
                         multiple 
-                        accept=".pdf,.txt"
+                        accept=".pdf,.txt,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.csv,.png,.jpg,.jpeg,.gif,.bmp,.md,.markdown"
                         required
                     >
                     <label for="files" class="file-label">Choose files...</label>
@@ -40,10 +40,31 @@
             <div id="upload-status" class="status-message"></div>
         </section>
 
+        <!-- Library Section -->
+        <section class="card library-section">
+            <h2>📚 Your Library</h2>
+            <p class="section-description">Manage your uploaded documents</p>
+            
+            <div class="library-stats">
+                <div class="stat">
+                    <span class="stat-value" id="total-documents">0</span>
+                    <span class="stat-label">Documents</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-value" id="total-chunks">0</span>
+                    <span class="stat-label">Chunks</span>
+                </div>
+            </div>
+            
+            <button id="refresh-library" class="btn btn-secondary">🔄 Refresh Library</button>
+            
+            <div id="library-list" class="library-list"></div>
+        </section>
+
         <!-- Chat Section -->
         <section class="card chat-section">
             <h2>💬 Ask Questions</h2>
-            <p class="section-description">Ask questions about your uploaded notes</p>
+            <p class="section-description">Ask questions - NotesGPT will search across all documents in your library</p>
             
             <form id="chat-form">
                 <div class="form-group">
@@ -51,18 +72,21 @@
                         id="question" 
                         name="question" 
                         rows="4" 
-                        placeholder="What would you like to know about your notes?"
+                        placeholder="What would you like to know from your library?"
                         required
                     ></textarea>
                 </div>
                 
                 <button type="submit" class="btn btn-primary">
-                    Ask NotesGPT
+                    🔍 Search & Answer
                 </button>
             </form>
             
             <!-- Answer Display -->
             <div id="answer-container" class="answer-container" style="display: none;">
+                <div class="answer-meta">
+                    <span id="sources-count"></span>
+                </div>
                 <h3>Answer:</h3>
                 <div id="answer" class="answer-box"></div>
                 
