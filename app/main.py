@@ -14,6 +14,11 @@ from fastapi.templating import Jinja2Templates
 from dotenv import load_dotenv
 
 from app.rag import index_document, query_notes
+from app.ocr import (
+    extract_text_from_image_bytes,
+    get_ocr_info,
+    is_ocr_available
+)
 
 
 # Load environment variables
@@ -127,6 +132,131 @@ async def chat(question: str = Form(...)):
     """
     result = query_notes(question)
     return result
+
+
+@app.post("/api/ocr")
+async def perform_ocr(file: UploadFile = File(...)):
+    """
+    Extract text from an uploaded image using OCR.
+    Returns the extracted text for user review/editing before indexing.
+    
+    Args:
+        file: Image file to perform OCR on
+        
+    Returns:
+        JSON response with extracted text and metadata
+    """
+    # Check if OCR is available
+    if not is_ocr_available():
+        return {
+            "status": "error",
+            "error": "OCR functionality not available. Please install required packages: easyocr, opencv-python"
+        }
+    
+    # Validate file type
+    file_ext = Path(file.filename).suffix.lower()
+    supported_formats = ['.png', '.jpg', '.jpeg', '.tiff', '.tif', '.bmp', '.gif', '.webp']
+    
+    if file_ext not in supported_formats:
+        return {
+            "status": "error",
+            "error": f"Unsupported file format: {file_ext}. Supported formats: {', '.join(supported_formats)}"
+        }
+    
+    try:
+        # Read file content
+        content = await file.read()
+        
+        # Perform OCR
+        result = extract_text_from_image_bytes(
+            content,
+            filename=file.filename,
+            languages=['en', 'fr'],  # English and French (compatible combination)
+            preprocess=True
+        )
+        
+        if result['success']:
+            # Calculate average confidence
+            avg_confidence = 0
+            if result.get('details'):
+                confidences = [d['confidence'] for d in result['details']]
+                if confidences:
+                    avg_confidence = sum(confidences) / len(confidences)
+            
+            return {
+                "status": "success",
+                "filename": file.filename,
+                "text": result['text'],
+                "word_count": len(result['text'].split()),
+                "confidence": round(avg_confidence * 100, 2) if avg_confidence > 0 else None,
+                "languages": "English, French"
+            }
+        else:
+            return {
+                "status": "error",
+                "error": result.get('error', 'OCR extraction failed')
+            }
+    
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": f"Error processing image: {str(e)}"
+        }
+
+
+@app.post("/api/ocr/index")
+async def index_ocr_text(
+    filename: str = Form(...),
+    text: str = Form(...)
+):
+    """
+    Index OCR-extracted text (after user review/editing) into the vector store.
+    
+    Args:
+        filename: Original filename of the image
+        text: Extracted/edited text to index
+        
+    Returns:
+        JSON response with indexing status
+    """
+    try:
+        # Create a temporary text file with the extracted content
+        temp_file_path = UPLOADS_DIR / f"{Path(filename).stem}_ocr.txt"
+        
+        # Write the text content
+        with open(temp_file_path, "w", encoding="utf-8") as f:
+            f.write(text)
+        
+        # Index the document
+        num_chunks = index_document(str(temp_file_path), f"{filename} (OCR)")
+        
+        return {
+            "status": "success",
+            "filename": f"{filename} (OCR)",
+            "chunks": num_chunks,
+            "message": f"Successfully indexed {num_chunks} chunks from OCR text"
+        }
+    
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": f"Failed to index OCR text: {str(e)}"
+        }
+
+
+@app.get("/api/ocr/info")
+async def get_ocr_capabilities():
+    """
+    Get information about OCR capabilities and configuration.
+    
+    Returns:
+        JSON response with OCR system information
+    """
+    info = get_ocr_info()
+    return {
+        "status": "success",
+        "ocr": info
+    }
 
 
 # ==================== Startup Event ====================

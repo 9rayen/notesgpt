@@ -6,8 +6,13 @@ Supports multiple document types: PDF, images (OCR), Word, Excel, PowerPoint, te
 
 import os
 import io
+import logging
 from typing import List, Dict, Any
 from pathlib import Path
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # LangChain imports
 from langchain_community.document_loaders import PyPDFLoader, TextLoader, UnstructuredMarkdownLoader
@@ -43,6 +48,13 @@ try:
     IMAGE_OCR_AVAILABLE = True
 except ImportError:
     IMAGE_OCR_AVAILABLE = False
+
+# Import new OCR module
+try:
+    from app.ocr import extract_text_from_image_file, is_ocr_available
+    EASYOCR_AVAILABLE = is_ocr_available()
+except ImportError:
+    EASYOCR_AVAILABLE = False
 
 
 
@@ -118,11 +130,18 @@ def load_file_to_documents(path: str) -> List[Document]:
             # Check if PDF contains any text
             total_text = "".join([doc.page_content.strip() for doc in documents])
             if not total_text or len(total_text) < 10:
-                # Try OCR as fallback for scanned PDFs
-                return [Document(
-                    page_content=f"This appears to be a scanned PDF (image-based) with no extractable text. Please use OCR tools or re-upload as images for text extraction.",
-                    metadata={"source": file_path.name, "error": True, "error_type": "scanned_pdf"}
-                )]
+                # Scanned PDF detected - try OCR as fallback
+                logger.info(f"Scanned PDF detected: {file_path.name}. Attempting OCR extraction...")
+                documents = load_scanned_pdf_with_ocr(path)
+                if documents and not documents[0].metadata.get("error", False):
+                    logger.info(f"Successfully extracted text from scanned PDF using OCR")
+                    return documents
+                else:
+                    # OCR failed or not available
+                    return [Document(
+                        page_content=f"Scanned PDF detected. This file contains only images with no extractable text. Please convert to text-based PDF or use OCR.",
+                        metadata={"source": file_path.name, "error": True, "error_type": "scanned_pdf"}
+                    )]
         
         # Image files with OCR
         elif file_extension in ['.png', '.jpg', '.jpeg', '.tiff', '.bmp', '.gif']:
@@ -165,9 +184,92 @@ def load_file_to_documents(path: str) -> List[Document]:
         )]
 
 
+def load_scanned_pdf_with_ocr(path: str) -> List[Document]:
+    """
+    Load a scanned PDF and extract text using OCR.
+    Converts PDF pages to images and performs OCR on each page.
+    
+    Args:
+        path: Path to the PDF file
+    
+    Returns:
+        List of Documents, one per page with OCR-extracted text
+    """
+    filename = Path(path).name
+    
+    # Check if OCR is available
+    if not EASYOCR_AVAILABLE:
+        return [Document(
+            page_content="OCR not available for scanned PDF. Please install EasyOCR: pip install easyocr pdf2image",
+            metadata={"source": filename, "error": True}
+        )]
+    
+    try:
+        from app.ocr import extract_text_from_pdf_with_ocr
+        
+        logger.info(f"Processing scanned PDF with OCR: {filename}")
+        result = extract_text_from_pdf_with_ocr(
+            path,
+            languages=['en', 'fr'],  # English and French (compatible combination)
+            preprocess=True
+        )
+        
+        if result['success']:
+            documents = []
+            for page_data in result['pages']:
+                page_num = page_data['page']
+                text = page_data['text']
+                
+                if not text.strip():
+                    text = f"[No text detected on page {page_num}]"
+                
+                # Calculate average confidence for this page
+                avg_confidence = None
+                if page_data.get('details'):
+                    confidences = [d['confidence'] for d in page_data['details']]
+                    if confidences:
+                        avg_confidence = sum(confidences) / len(confidences)
+                
+                metadata = {
+                    "source": filename,
+                    "page": page_num - 1,  # 0-indexed for consistency
+                    "type": "pdf_ocr",
+                    "ocr_engine": "easyocr",
+                    "languages": "en,fr"
+                }
+                
+                if avg_confidence is not None:
+                    metadata['avg_confidence'] = avg_confidence
+                
+                documents.append(Document(
+                    page_content=text,
+                    metadata=metadata
+                ))
+            
+            logger.info(f"Successfully extracted text from {len(documents)} pages using OCR")
+            return documents if documents else [Document(
+                page_content="No text detected in scanned PDF.",
+                metadata={"source": filename, "error": True}
+            )]
+        else:
+            error_msg = result.get('error', 'OCR processing failed')
+            logger.error(f"OCR failed for {filename}: {error_msg}")
+            return [Document(
+                page_content=f"Error processing scanned PDF: {error_msg}",
+                metadata={"source": filename, "error": True}
+            )]
+    except Exception as e:
+        logger.error(f"Error processing scanned PDF {filename}: {str(e)}")
+        return [Document(
+            page_content=f"Error processing scanned PDF: {str(e)}",
+            metadata={"source": filename, "error": True}
+        )]
+
+
 def load_image_with_ocr(path: str) -> List[Document]:
     """
-    Load an image and extract text using OCR.
+    Load an image and extract text using OCR (EasyOCR with multi-language support).
+    Falls back to pytesseract if EasyOCR is not available.
     
     Args:
         path: Path to the image file
@@ -175,10 +277,52 @@ def load_image_with_ocr(path: str) -> List[Document]:
     Returns:
         List containing a single Document with extracted text
     """
+    filename = Path(path).name
+    
+    # Try EasyOCR first (better accuracy, multi-language support)
+    if EASYOCR_AVAILABLE:
+        try:
+            result = extract_text_from_image_file(
+                path,
+                languages=['en', 'fr'],  # English and French (compatible combination)
+                preprocess=True  # Apply preprocessing for better accuracy
+            )
+            
+            if result['success']:
+                text = result['text']
+                if not text.strip():
+                    text = "No text detected in image."
+                
+                # Add confidence scores to metadata
+                metadata = {
+                    "source": filename,
+                    "type": "image_ocr",
+                    "ocr_engine": "easyocr",
+                    "languages": "en,fr"
+                }
+                
+                # Add average confidence if available
+                if result.get('details'):
+                    confidences = [d['confidence'] for d in result['details']]
+                    if confidences:
+                        metadata['avg_confidence'] = sum(confidences) / len(confidences)
+                
+                return [Document(
+                    page_content=text,
+                    metadata=metadata
+                )]
+            else:
+                # EasyOCR failed, try pytesseract fallback
+                error_msg = result.get('error', 'Unknown error')
+                logger.warning(f"EasyOCR failed for {filename}: {error_msg}. Trying pytesseract...")
+        except Exception as e:
+            logger.warning(f"EasyOCR error for {filename}: {str(e)}. Trying pytesseract...")
+    
+    # Fallback to pytesseract
     if not IMAGE_OCR_AVAILABLE:
         return [Document(
-            page_content="Image processing not available. Please install Pillow and pytesseract.",
-            metadata={"source": Path(path).name, "error": True}
+            page_content="OCR not available. Please install EasyOCR (recommended) or pytesseract.",
+            metadata={"source": filename, "error": True}
         )]
     
     try:
@@ -190,12 +334,16 @@ def load_image_with_ocr(path: str) -> List[Document]:
         
         return [Document(
             page_content=text,
-            metadata={"source": Path(path).name, "type": "image_ocr"}
+            metadata={
+                "source": filename,
+                "type": "image_ocr",
+                "ocr_engine": "pytesseract"
+            }
         )]
     except Exception as e:
         return [Document(
             page_content=f"Error processing image: {str(e)}",
-            metadata={"source": Path(path).name, "error": True}
+            metadata={"source": filename, "error": True}
         )]
 
 
@@ -423,7 +571,10 @@ def index_document(file_path: str, display_name: str) -> int:
         error_msg = error_docs[0].page_content
         error_type = error_docs[0].metadata.get("error_type", "unknown")
         if error_type == "scanned_pdf":
-            raise ValueError("Scanned PDF detected. This file contains only images with no extractable text. Please convert to text-based PDF or use OCR.")
+            if not EASYOCR_AVAILABLE:
+                raise ValueError("Scanned PDF detected. This file contains only images with no extractable text. Please install OCR dependencies: pip install easyocr pdf2image poppler-utils")
+            else:
+                raise ValueError("Scanned PDF detected. This file contains only images with no extractable text. OCR processing failed. Please check the logs for details.")
         else:
             raise ValueError(error_msg)
     

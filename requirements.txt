@@ -33,6 +33,10 @@ Pillow
 pytesseract
 pdf2image
 
+# Advanced OCR with EasyOCR (multi-language support)
+easyocr==1.7.1
+opencv-python==4.8.1.78
+
 # Markdown support
 markdown
 
