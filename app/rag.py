@@ -632,12 +632,10 @@ def query_notes(question: str, k: int = TOP_K) -> Dict[str, Any]:
     
     # Build context for the LLM
     context_parts = []
-    citations = []
-    sources_used = set()
+    all_citations = []
     
     for i, doc in enumerate(retrieved_docs, 1):
         source = doc.metadata.get("source", "Unknown")
-        sources_used.add(source)
         page = doc.metadata.get("page", None)
         slide = doc.metadata.get("slide", None)
         sheet = doc.metadata.get("sheet", None)
@@ -671,14 +669,14 @@ def query_notes(question: str, k: int = TOP_K) -> Dict[str, Any]:
         if sheet is not None:
             citation["sheet"] = sheet
         
-        citations.append(citation)
+        all_citations.append(citation)
     
     # Build the prompt
     context = "\n".join(context_parts)
     
     prompt = f"""You are a helpful study assistant with access to a comprehensive library. Answer the question based ONLY on the context provided below from multiple documents in the library.
 
-Context from the user's library ({len(sources_used)} documents):
+Context from the user's library:
 {context}
 
 Instructions:
@@ -700,11 +698,31 @@ Answer:"""
     # Extract the text content from the response
     answer_text = response.content if hasattr(response, 'content') else str(response)
     
+    # Determine which citations were actually used in the answer
+    # by checking if the citation number [1], [2], etc. appears in the answer
+    import re
+    used_citation_ids = set()
+    for citation_id in range(1, len(all_citations) + 1):
+        # Look for [1], [2], etc. in the answer
+        if f"[{citation_id}]" in answer_text:
+            used_citation_ids.add(citation_id)
+    
+    # Filter citations to only include those that were actually referenced
+    if used_citation_ids:
+        citations = [c for c in all_citations if c["id"] in used_citation_ids]
+    else:
+        # If no explicit citations found in answer, include all retrieved docs
+        # (fallback for when LLM doesn't explicitly cite)
+        citations = all_citations
+    
+    # Count unique sources from the citations actually used
+    sources_used = set(c["source"] for c in citations)
+    
     return {
         "answer": answer_text,
         "citations": citations,
         "sources_searched": len(sources_used),
-        "total_chunks": len(retrieved_docs)
+        "total_chunks": len(citations)
     }
 
 
